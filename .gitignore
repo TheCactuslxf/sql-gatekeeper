@@ -1,0 +1,9 @@
+.venv/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
+.env
+
+.DS_Store
+docs/context.md
