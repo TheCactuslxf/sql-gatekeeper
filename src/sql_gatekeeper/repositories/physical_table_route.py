@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from sql_gatekeeper.db.models import PhysicalTableRoute
@@ -28,3 +28,22 @@ class PhysicalTableRouteRepository:
             PhysicalTableRoute.enabled.is_(True),
         )
         return self.session.execute(stmt).scalar_one_or_none()
+
+    def list_enabled_route_values_by_logical_table(self, logical_table_id: int, *, limit: int = 20) -> list[str]:
+        stmt = (
+            select(PhysicalTableRoute.route_value)
+            .where(
+                PhysicalTableRoute.logical_table_id == logical_table_id,
+                PhysicalTableRoute.enabled.is_(True),
+            )
+            .order_by(PhysicalTableRoute.route_value.asc())
+            .limit(limit)
+        )
+        return list(self.session.execute(stmt).scalars())
+
+    def count_enabled_by_logical_table(self, logical_table_id: int) -> int:
+        stmt = select(func.count()).select_from(PhysicalTableRoute).where(
+            PhysicalTableRoute.logical_table_id == logical_table_id,
+            PhysicalTableRoute.enabled.is_(True),
+        )
+        return int(self.session.execute(stmt).scalar_one())

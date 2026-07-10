@@ -75,8 +75,10 @@ def test_check_sql_endpoint_allows_simple_select(monkeypatch, client):
     assert body["allowed"] is True
     assert body["reason_code"] == "ALLOW"
     assert body["rewritten_sql"] == "select * from user_1 where uid = 10001 limit 10"
+    assert body["logical_tables"] == ["user"]
     assert body["physical_tables"] == ["user_1"]
     assert body["datasource_codes"] == ["biz_user_db"]
+    assert body["route_diagnostics"][0]["evaluated_route_value"] == "1"
     assert len(body["explain_summaries"]) == 1
 
 
@@ -116,6 +118,35 @@ def test_check_sql_endpoint_rejects_missing_route_context(monkeypatch, client):
     body = response.json()
     assert body["allowed"] is False
     assert body["reason_code"] == "MISSING_ROUTE_FACTOR"
+    assert body["logical_tables"] == ["order"]
+    assert body["route_diagnostics"] == [
+        {
+            "original_table_name": "order",
+            "logical_table_name": "order",
+            "route_source": "route_context_or_sql",
+            "required_factors": [
+                {
+                    "factor_name": "biz_date",
+                    "source_type": "route_context",
+                    "source_key": "biz_date",
+                    "required": True,
+                    "provided_value": None,
+                    "extractor_config": {},
+                }
+            ],
+            "missing_factors": ["biz_date"],
+            "extracted_values": {},
+            "route_rule": {
+                "rule_name": "order_month",
+                "rule_type": "format",
+                "expression": "biz_date.replace('-', '_')",
+                "output_format": "{value}",
+            },
+            "evaluated_route_value": None,
+            "available_route_values_sample": ["2025_06", "2025_07"],
+            "available_route_count": 2,
+        }
+    ]
 
 
 def test_check_sql_endpoint_resolves_time_shard(monkeypatch, client):

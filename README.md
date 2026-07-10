@@ -31,6 +31,32 @@ Python implementation of a SQL gatekeeper service for LLM-generated MySQL SQL.
 - Executor
 - Audit logger
 
+## Business Shard Factor Contract
+
+For imported sharded tables, callers can provide the business shard column name while keeping
+the shard value in the logical SQL predicate:
+
+```json
+{
+  "sql": "select count(1) as cnt from partner__partner_relation_info where from_uid = '97585024' limit 1",
+  "route_context": {"shard_column": "from_uid"}
+}
+```
+
+The service extracts the predicate value, computes the route from imported shard metadata,
+rewrites the logical table to the physical table, and executes the checked SQL. Callers do not
+need to calculate or provide `route_suffix`.
+
+Existing imported metadata remains compatible through the runtime fallback. To regenerate the
+metadata with the new business-factor route definitions, run:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m sql_gatekeeper.tools.spy_table_config_sync
+```
+
+The sync command requires the existing `SPY_DB_*` environment variables, including
+`SPY_DB_PASSWORD`.
+
 ## Initial Development Order
 
 1. Project skeleton and local Docker environment

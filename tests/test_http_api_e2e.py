@@ -144,6 +144,7 @@ def test_http_check_allows_dynamic_user_shard_and_writes_audit(http_server):
     body = response.json()
     assert body["allowed"] is True
     assert body["rewritten_sql"] == "select * from user_1 where uid = 10001 limit 10"
+    assert body["logical_tables"] == ["user"]
     assert body["physical_tables"] == ["user_1"]
     assert _audit_count(settings) == before + 1
 
@@ -161,6 +162,8 @@ def test_http_check_rejects_missing_route_context_and_writes_audit(http_server):
     body = response.json()
     assert body["allowed"] is False
     assert body["reason_code"] == "MISSING_ROUTE_FACTOR"
+    assert body["logical_tables"] == ["order"]
+    assert body["route_diagnostics"][0]["missing_factors"] == ["biz_date"]
     assert _audit_count(settings) == before + 1
 
 

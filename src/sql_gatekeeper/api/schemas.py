@@ -17,9 +17,11 @@ class SqlDecisionResponse(BaseModel):
     reason_code: str
     message: str
     rewritten_sql: str = ""
+    logical_tables: list[str] = Field(default_factory=list)
     physical_tables: list[str] = Field(default_factory=list)
     datasource_codes: list[str] = Field(default_factory=list)
     explain_summaries: list[dict[str, Any]] = Field(default_factory=list)
+    route_diagnostics: list[dict[str, Any]] = Field(default_factory=list)
     execution_ms: int = 0
     row_count: int = 0
     rows: list[dict[str, Any]] = Field(default_factory=list)

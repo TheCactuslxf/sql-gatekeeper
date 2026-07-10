@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from sqlalchemy.orm import Session
 
@@ -31,6 +31,7 @@ class CheckResult:
     physical_tables: list[str]
     datasource_codes: list[str]
     explain_summaries: list[dict]
+    route_diagnostics: list[dict]
 
 
 class SqlCheckService:
@@ -64,6 +65,7 @@ class SqlCheckService:
                 physical_tables=[],
                 datasource_codes=[],
                 explain_summaries=[],
+                route_diagnostics=[],
             )
 
         parsed_sql = self.sql_parser.parse(sql)
@@ -75,10 +77,11 @@ class SqlCheckService:
                 message=route_decision.message,
                 parsed_sql=parsed_sql,
                 rewritten_sql="",
-                logical_tables=[],
+                logical_tables=[item.logical_table_name for item in route_decision.diagnostics],
                 physical_tables=[],
                 datasource_codes=[],
                 explain_summaries=[],
+                route_diagnostics=[asdict(item) for item in route_decision.diagnostics],
             )
 
         rewrite_plans = [target.rewrite_plan for target in route_decision.targets if target.rewrite_plan is not None]
@@ -102,6 +105,7 @@ class SqlCheckService:
                 physical_tables=[target.physical_table_name for target in route_decision.targets],
                 datasource_codes=[target.datasource_code for target in route_decision.targets],
                 explain_summaries=[summary.__dict__ for summary in filter_context.explain_summaries],
+                route_diagnostics=[asdict(item) for item in route_decision.diagnostics],
             )
         return CheckResult(
             allowed=True,
@@ -113,4 +117,5 @@ class SqlCheckService:
             physical_tables=[target.physical_table_name for target in route_decision.targets],
             datasource_codes=[target.datasource_code for target in route_decision.targets],
             explain_summaries=[summary.__dict__ for summary in filter_context.explain_summaries],
+            route_diagnostics=[asdict(item) for item in route_decision.diagnostics],
         )
