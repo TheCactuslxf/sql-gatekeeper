@@ -4,6 +4,8 @@ All notable changes to SQL Gatekeeper will be documented in this file.
 
 ## Unreleased
 
+## 0.2.0
+
 - Reworked project README for public open-source discovery.
 - Added Chinese README.
 - Added roadmap, contribution guide, security policy, and CI workflow.
