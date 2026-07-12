@@ -22,6 +22,12 @@ services:
       DEMO_ORDER_DB_NAME: biz_order
       DEMO_ORDER_DB_USER: readonly
       DEMO_ORDER_DB_PASSWORD: readonly
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      REDIS_PASSWORD: ""
+      REDIS_DATASOURCE_CODE: demo_redis
+      REDIS_ALLOWED_KEY_PREFIXES: "demo:,user:,order:"
     ports:
       - "8080:8080"
     depends_on:
@@ -31,6 +37,19 @@ services:
         condition: service_healthy
       biz-order-db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: sql-gatekeeper-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
 
   meta-db:
     image: mysql:8.0

@@ -56,3 +56,39 @@ Invoke-DemoRequest `
         sql = "update user set status = 0 where uid = 10001"
         route_context = @{}
     }
+
+Invoke-DemoRequest `
+    -Title "check Redis GET" `
+    -Path "/api/v1/redis/check" `
+    -Body @{
+        request_id = "demo-redis-check"
+        operator = "ai-agent"
+        scene = "demo"
+        command = "GET"
+        args = @("demo:user:10001")
+        redis_context = @{}
+    }
+
+Invoke-DemoRequest `
+    -Title "execute Redis GET" `
+    -Path "/api/v1/redis/execute" `
+    -Body @{
+        request_id = "demo-redis-execute"
+        operator = "ai-agent"
+        scene = "demo"
+        command = "GET"
+        args = @("demo:user:10001")
+        redis_context = @{}
+    }
+
+Invoke-DemoRequest `
+    -Title "reject unsafe Redis command" `
+    -Path "/api/v1/redis/check" `
+    -Body @{
+        request_id = "demo-redis-reject"
+        operator = "ai-agent"
+        scene = "demo"
+        command = "SET"
+        args = @("demo:user:10001", "alice")
+        redis_context = @{}
+    }

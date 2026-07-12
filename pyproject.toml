@@ -18,6 +18,8 @@ keywords = [
   "database-security",
   "ai-agents",
   "sharding",
+  "redis",
+  "cache-security",
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -40,6 +42,7 @@ dependencies = [
   "pydantic>=2.7,<3.0",
   "pydantic-settings>=2.3,<3.0",
   "PyMySQL>=1.1,<2.0",
+  "redis>=5.0,<7.0",
 ]
 
 [project.optional-dependencies]

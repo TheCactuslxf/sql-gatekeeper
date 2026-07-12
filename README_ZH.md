@@ -1,8 +1,8 @@
 # SQL Gatekeeper
 
-> 面向 LLM 生成 SQL 的 MySQL 生产网关：自动分库分表路由、SQL 改写、EXPLAIN 风险检查、只读执行、全链路审计。
+> 面向 AI Agent 的数据访问安全网关：自动分库分表路由、SQL 改写、EXPLAIN 风险检查、安全查询 Redis、全链路审计。
 
-SQL Gatekeeper 放在 AI Agent 和 MySQL 之间。调用方可以提交逻辑 SQL，网关负责判断 SQL 是否安全、根据元数据路由到真实物理分表、改写 SQL、检查执行计划，并记录审计日志。
+SQL Gatekeeper 放在 AI Agent 和生产数据存储之间。调用方可以提交逻辑 SQL，也可以提交结构化 Redis 只读命令，网关负责判断请求是否安全、根据元数据路由到真实物理分表、限制 Redis 访问范围，并记录审计日志。
 
 ![SQL Gatekeeper terminal demo](docs/assets/demo-terminal.png)
 
@@ -12,7 +12,7 @@ SQL Gatekeeper 放在 AI Agent 和 MySQL 之间。调用方可以提交逻辑 SQ
 
 - 模型可能生成写操作、多语句、缺少 `LIMIT` 的查询，或者代价很高的扫描。
 - 当模型可以控制整条 SQL 的结构时，传统 prepared statement 和 ORM 转义并不能完全解决问题。
-- 真实业务库经常有逻辑表、分库分表、路由规则，这些细节不应该都暴露给模型。
+- 真实业务库经常有逻辑表、分库分表、缓存 key 和路由规则，这些细节不应该都暴露给模型。
 - AI 生成 SQL 的通过、拒绝和执行结果都需要审计。
 
 SQL Gatekeeper 就是为这条边界准备的。
@@ -26,6 +26,8 @@ SQL Gatekeeper 就是为这条边界准备的。
 - 拦截非 `SELECT`、多语句、缺少 `LIMIT`、超大 `LIMIT`、跨数据源 join 和高风险执行计划。
 - 通过 MySQL `EXPLAIN` 拦截大表全表扫描、`Using temporary`、`Using filesort`。
 - 使用只读账号执行通过检查的 SQL。
+- 支持通过白名单安全查询 Redis。
+- 拦截 Redis 写命令、通配 key、越权 key 和超大范围读取。
 - 对校验和执行结果写入审计日志。
 
 ## 快速开始
@@ -44,6 +46,7 @@ docker compose up --build
 - 一个元数据库 MySQL
 - 一个 demo 用户库 MySQL
 - 一个 demo 订单库 MySQL
+- 一个 demo Redis
 
 API 容器启动时会自动创建元数据表，并写入 demo 路由规则。
 
@@ -152,6 +155,23 @@ select order_id, amount from order where order_id = 'A1002' limit 1
 select order_id, amount from order_2025_07 where order_id = 'A1002' limit 1
 ```
 
+## Redis 查询示例
+
+Redis 请求使用结构化命令，避免让模型提交任意 Redis CLI 文本：
+
+```json
+{
+  "request_id": "redis-123",
+  "operator": "ai-agent",
+  "scene": "cache-debug",
+  "command": "GET",
+  "args": ["demo:user:10001"],
+  "redis_context": {}
+}
+```
+
+当前只允许有限只读命令，例如 `GET`、`MGET`、`HGET`、`HGETALL`、`EXISTS`、`TTL`、`TYPE`、`LRANGE`、`ZRANGE`。会拦截 `SET`、`DEL`、`EXPIRE`、`EVAL`、`CONFIG`、`KEYS`、`SCAN` 等高风险命令，也会拦截 `demo:user:*` 这类通配 key。
+
 ## 适合谁
 
 - 正在做 Text-to-SQL 或 AI Agent 数据库访问的团队。
@@ -178,6 +198,7 @@ RUN_DOCKER_TESTS=1 pytest tests
 - 使用 `sqlglot` 等 AST 解析器替换当前轻量正则解析器。
 - 支持 PostgreSQL。
 - 增加 MCP server 模式。
+- 增加 Redis 租户级 key 前缀策略。
 - 增加策略 DSL，支持租户条件、表白名单、列黑名单。
 - 增加审计看板。
 - 发布 Docker 镜像和 PyPI 包。

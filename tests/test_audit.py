@@ -2,6 +2,7 @@ from sql_gatekeeper.repositories.audit_log import RequestAuditLogRepository
 from sql_gatekeeper.services.audit import AuditLogService, AuditRequest
 from sql_gatekeeper.services.checker import CheckResult
 from sql_gatekeeper.services.executor import ExecuteResult
+from sql_gatekeeper.services.redis_gatekeeper import RedisDecision, RedisExecuteResult
 
 
 def test_audit_log_service_writes_check_and_execute_records(meta_session):
@@ -41,3 +42,39 @@ def test_audit_log_service_writes_check_and_execute_records(meta_session):
     assert records[0].decision == "ALLOW"
     assert records[1].decision == "EXECUTED"
     assert records[1].execution_ms == 12
+
+
+def test_audit_log_service_writes_redis_records(meta_session):
+    service = AuditLogService(meta_session)
+    request = AuditRequest(
+        request_id="redis-001",
+        operator="ai-agent",
+        scene="cache",
+        sql="redis:GET demo:user:10001",
+    )
+    decision = RedisDecision(
+        allowed=True,
+        reason_code="ALLOW",
+        message="ok",
+        command="GET",
+        args=["demo:user:10001"],
+        datasource_code="demo_redis",
+        diagnostics=[{"allowed_commands": ["GET"]}],
+    )
+    execute_result = RedisExecuteResult(
+        allowed=True,
+        reason_code="EXECUTED",
+        message="done",
+        rows=[{"key": "demo:user:10001", "value": "bob"}],
+        row_count=1,
+        execution_ms=4,
+    )
+
+    service.log_redis_check(request, decision)
+    service.log_redis_execute(request, decision, execute_result)
+    meta_session.commit()
+
+    records = RequestAuditLogRepository(meta_session).list_by_request_id("redis-001")
+    assert len(records) == 2
+    assert records[0].datasource_codes == ["demo_redis"]
+    assert records[1].decision == "EXECUTED"

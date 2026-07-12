@@ -28,6 +28,16 @@ class Settings(BaseSettings):
     demo_order_db_user: str = Field(default="readonly", alias="DEMO_ORDER_DB_USER")
     demo_order_db_password: str = Field(default="readonly", alias="DEMO_ORDER_DB_PASSWORD")
 
+    redis_host: str = Field(default="127.0.0.1", alias="REDIS_HOST")
+    redis_port: int = Field(default=6379, alias="REDIS_PORT")
+    redis_db: int = Field(default=0, alias="REDIS_DB")
+    redis_password: str = Field(default="", alias="REDIS_PASSWORD")
+    redis_datasource_code: str = Field(default="demo_redis", alias="REDIS_DATASOURCE_CODE")
+    redis_allowed_key_prefixes: str = Field(default="demo:,user:,order:", alias="REDIS_ALLOWED_KEY_PREFIXES")
+    redis_max_keys_per_request: int = Field(default=20, alias="REDIS_MAX_KEYS_PER_REQUEST")
+    redis_max_result_items: int = Field(default=100, alias="REDIS_MAX_RESULT_ITEMS")
+    redis_max_key_length: int = Field(default=256, alias="REDIS_MAX_KEY_LENGTH")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -9,6 +9,7 @@ All notable changes to SQL Gatekeeper will be documented in this file.
 - Added roadmap, contribution guide, security policy, and CI workflow.
 - Added Dockerfile, one-command Docker Compose startup, and demo scripts.
 - Added README demo screenshot.
+- Added safe Redis check/execute API with readonly command allowlist and key-scope limits.
 
 ## 0.1.0
 

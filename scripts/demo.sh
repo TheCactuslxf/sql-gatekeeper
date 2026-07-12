@@ -42,3 +42,42 @@ curl -s "$BASE_URL/api/v1/sql/check" \
     "route_context": {}
   }'
 echo
+
+echo "== check Redis GET =="
+curl -s "$BASE_URL/api/v1/redis/check" \
+  -H "content-type: application/json" \
+  -d '{
+    "request_id": "demo-redis-check",
+    "operator": "ai-agent",
+    "scene": "demo",
+    "command": "GET",
+    "args": ["demo:user:10001"],
+    "redis_context": {}
+  }'
+echo
+
+echo "== execute Redis GET =="
+curl -s "$BASE_URL/api/v1/redis/execute" \
+  -H "content-type: application/json" \
+  -d '{
+    "request_id": "demo-redis-execute",
+    "operator": "ai-agent",
+    "scene": "demo",
+    "command": "GET",
+    "args": ["demo:user:10001"],
+    "redis_context": {}
+  }'
+echo
+
+echo "== reject unsafe Redis command =="
+curl -s "$BASE_URL/api/v1/redis/check" \
+  -H "content-type: application/json" \
+  -d '{
+    "request_id": "demo-redis-reject",
+    "operator": "ai-agent",
+    "scene": "demo",
+    "command": "SET",
+    "args": ["demo:user:10001", "alice"],
+    "redis_context": {}
+  }'
+echo

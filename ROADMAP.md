@@ -9,6 +9,7 @@ SQL Gatekeeper is currently an early-stage project focused on one concrete produ
 - Add GitHub issue templates and labels for bugs, features, docs, and good first issues.
 - Replace the lightweight SQL parser with an AST-based parser such as `sqlglot`.
 - Add more policy tests for tenant filters, table allowlists, and column deny lists.
+- Add Redis policy profiles for tenant-specific key prefixes and command sets.
 
 ## Mid Term
 
@@ -16,6 +17,7 @@ SQL Gatekeeper is currently an early-stage project focused on one concrete produ
 - Publish a Docker image.
 - Publish a PyPI package.
 - Add a policy DSL for common database guardrails.
+- Add Redis audit analysis for rejected cache access.
 - Add a small audit dashboard for request history and rejected-query analysis.
 
 ## Longer Term

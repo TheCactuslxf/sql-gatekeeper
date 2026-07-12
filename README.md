@@ -4,24 +4,25 @@
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-> A production-oriented MySQL gateway for LLM-generated SQL: route logical tables to shards, rewrite SQL, run EXPLAIN-based safety checks, execute read-only queries, and audit every request.
+> A production-oriented data access gateway for AI agents: route LLM-generated MySQL SQL to shards, rewrite SQL, run EXPLAIN-based safety checks, safely query Redis, and audit every request.
 
-SQL Gatekeeper sits between an AI agent and MySQL. It lets the agent write simple logical SQL while the gateway decides whether the query is safe, maps logical tables to physical shards, rewrites the SQL, checks the execution plan, and records the decision.
+SQL Gatekeeper sits between an AI agent and production data stores. It lets the agent write simple logical SQL or structured Redis read commands while the gateway decides whether the request is safe, maps logical tables to physical shards, checks execution risk, limits Redis access, and records the decision.
 
 ![SQL Gatekeeper terminal demo](docs/assets/demo-terminal.png)
 
 ```mermaid
 flowchart LR
     A["LLM / AI Agent"] --> B["SQL Gatekeeper API"]
-    B --> C["Basic SQL guard"]
-    C --> D["Parser"]
-    D --> E["Route resolver"]
-    E --> F["SQL rewrite"]
-    F --> G["Policy filters"]
-    G --> H["EXPLAIN risk check"]
-    H --> I["Read-only execution"]
-    H --> J["Audit log"]
-    I --> J
+    B --> C["SQL safety pipeline"]
+    B --> D["Redis safety pipeline"]
+    C --> E["Route resolver + SQL rewrite"]
+    E --> F["EXPLAIN risk check"]
+    F --> G["Read-only MySQL execution"]
+    D --> H["Readonly command allowlist"]
+    H --> I["Key scope + result limits"]
+    I --> J["Redis execution"]
+    G --> K["Audit log"]
+    J --> K
 ```
 
 ## Why This Exists
@@ -30,7 +31,7 @@ Letting an LLM talk to a database is useful, but raw SQL execution is a risky bo
 
 - The model can generate writes, multi-statements, missing limits, or expensive scans.
 - Prepared statements and ORM escaping do not solve the problem when the model controls the query shape.
-- Production schemas often use logical tables, physical shards, and routing metadata that the model should not need to know.
+- Production schemas often use logical tables, physical shards, cache keys, and routing metadata that the model should not need to know.
 - Teams need an audit trail for both approved and rejected AI-generated queries.
 
 SQL Gatekeeper is built for that boundary.
@@ -44,6 +45,8 @@ SQL Gatekeeper is built for that boundary.
 - Rejects non-`SELECT` statements, multi-statements, missing `LIMIT`, oversized `LIMIT`, cross-datasource joins, and unsafe execution plans.
 - Uses MySQL `EXPLAIN` to block large scans, `Using temporary`, and `Using filesort` according to policy.
 - Executes approved SQL with read-only datasource credentials.
+- Checks and executes safe Redis read commands through a readonly allowlist.
+- Blocks Redis writes, wildcard key scans, out-of-scope keys, and oversized range reads.
 - Writes audit records for checks and executions.
 
 ## Quick Start
@@ -62,6 +65,7 @@ This starts:
 - a metadata MySQL instance
 - a demo user MySQL instance
 - a demo order MySQL instance
+- a demo Redis instance
 
 The API container automatically creates metadata tables and seeds demo routing rules on startup.
 
@@ -167,6 +171,27 @@ Request shape:
 }
 ```
 
+### `POST /api/v1/redis/check`
+
+Returns the decision for a structured Redis read command without executing it.
+
+### `POST /api/v1/redis/execute`
+
+Runs the same Redis safety pipeline, then executes approved readonly Redis commands.
+
+Request shape:
+
+```json
+{
+  "request_id": "redis-123",
+  "operator": "ai-agent",
+  "scene": "cache-debug",
+  "command": "GET",
+  "args": ["demo:user:10001"],
+  "redis_context": {}
+}
+```
+
 ## Routing Examples
 
 The demo metadata includes two logical tables:
@@ -225,15 +250,33 @@ SQL Gatekeeper currently blocks:
 - Full scans on large tables.
 - `Using temporary` and `Using filesort` when policy rejects them.
 
+Redis Gatekeeper currently allows only bounded readonly commands:
+
+- `GET`, `MGET`
+- `HGET`, `HMGET`, `HGETALL`
+- `EXISTS`, `TTL`, `PTTL`, `TYPE`
+- `LLEN`, `SCARD`, `ZCARD`
+- `LRANGE`, `ZRANGE`, `SMEMBERS`
+
+Redis Gatekeeper blocks:
+
+- write commands such as `SET`, `DEL`, `EXPIRE`, `HSET`, `LPUSH`, `SADD`, and `ZADD`
+- administrative or scripting commands such as `CONFIG`, `EVAL`, `FLUSHDB`, and `FLUSHALL`
+- key discovery commands such as `KEYS` and `SCAN`
+- wildcard key patterns such as `demo:user:*`
+- keys outside configured prefixes
+- range or collection reads above configured result limits
+
 ## Architecture
 
 | Module | Responsibility |
 | --- | --- |
-| API layer | FastAPI routes for check and execute |
+| API layer | FastAPI routes for SQL and Redis check/execute |
 | SQL parser | Extract SQL type, tables, aliases, predicates, and limit |
 | Route decision engine | Resolve logical tables to datasource and physical table |
 | SQL rewrite engine | Replace logical table tokens with physical table names |
 | Filter chain | Apply policy, datasource, SQL type, limit, and EXPLAIN checks |
+| Redis gatekeeper | Apply readonly command, key scope, and result limit checks |
 | Executor | Execute approved SQL with read-only credentials |
 | Audit logger | Persist request, decision, rewritten SQL, and EXPLAIN summary |
 
@@ -265,6 +308,7 @@ make down
 - Replace the current lightweight regex parser with an AST-based parser such as `sqlglot`.
 - Add PostgreSQL support.
 - Add MCP server mode for AI agents.
+- Add Redis policy profiles for tenant-specific key prefixes.
 - Add a policy DSL for tenant filters, table allowlists, and column deny lists.
 - Add a small audit dashboard.
 - Publish a Docker image and a PyPI package.

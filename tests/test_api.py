@@ -5,6 +5,7 @@ from sql_gatekeeper.api import routes
 from sql_gatekeeper.api.app import create_app
 from sql_gatekeeper.services.explain import ExplainPlanSummary, ExplainRiskDecision, ExplainRiskEvaluator
 from sql_gatekeeper.services.executor import SqlExecutionService, ExecuteResult
+from sql_gatekeeper.services.redis_gatekeeper import RedisExecuteResult, RedisGatekeeperService
 from tests_support import seed_extended_route_metadata
 
 
@@ -49,12 +50,87 @@ def _mock_execute_allow(monkeypatch):
     monkeypatch.setattr(SqlExecutionService, "execute", fake_execute)
 
 
+def _mock_redis_execute_allow(monkeypatch):
+    def fake_execute(self, decision):
+        return RedisExecuteResult(
+            allowed=True,
+            reason_code="EXECUTED",
+            message="Redis command executed successfully",
+            rows=[{"key": "demo:user:10001", "value": "bob"}],
+            row_count=1,
+            execution_ms=3,
+        )
+
+    monkeypatch.setattr(RedisGatekeeperService, "execute", fake_execute)
+
+
 def test_health_endpoint(monkeypatch, client):
     _mock_explain_allow(monkeypatch)
     response = client.get("/health")
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+def test_check_redis_endpoint_allows_safe_get(client):
+    response = client.post(
+        "/api/v1/redis/check",
+        json={
+            "request_id": "redis-001",
+            "operator": "ai-agent",
+            "scene": "cache",
+            "command": "GET",
+            "args": ["demo:user:10001"],
+            "redis_context": {},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["allowed"] is True
+    assert body["reason_code"] == "ALLOW"
+    assert body["command"] == "GET"
+    assert body["datasource_code"] == "demo_redis"
+
+
+def test_check_redis_endpoint_rejects_write_command(client):
+    response = client.post(
+        "/api/v1/redis/check",
+        json={
+            "request_id": "redis-002",
+            "operator": "ai-agent",
+            "scene": "cache",
+            "command": "SET",
+            "args": ["demo:user:10001", "bob"],
+            "redis_context": {},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["allowed"] is False
+    assert body["reason_code"] == "REDIS_COMMAND_DENIED"
+
+
+def test_execute_redis_endpoint_returns_rows(monkeypatch, client):
+    _mock_redis_execute_allow(monkeypatch)
+    response = client.post(
+        "/api/v1/redis/execute",
+        json={
+            "request_id": "redis-003",
+            "operator": "ai-agent",
+            "scene": "cache",
+            "command": "GET",
+            "args": ["demo:user:10001"],
+            "redis_context": {},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["allowed"] is True
+    assert body["reason_code"] == "EXECUTED"
+    assert body["rows"] == [{"key": "demo:user:10001", "value": "bob"}]
 
 
 def test_check_sql_endpoint_allows_simple_select(monkeypatch, client):

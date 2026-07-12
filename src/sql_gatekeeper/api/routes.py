@@ -1,11 +1,12 @@
 from fastapi import APIRouter
 
-from sql_gatekeeper.api.schemas import HealthResponse, SqlDecisionResponse, SqlRequest
+from sql_gatekeeper.api.schemas import HealthResponse, RedisDecisionResponse, RedisRequest, SqlDecisionResponse, SqlRequest
 from sql_gatekeeper.config import get_settings
 from sql_gatekeeper.db.session import create_session_factory
 from sql_gatekeeper.services.audit import AuditLogService, AuditRequest
 from sql_gatekeeper.services.checker import SqlCheckService
 from sql_gatekeeper.services.executor import SqlExecutionService
+from sql_gatekeeper.services.redis_gatekeeper import RedisGatekeeperService
 
 router = APIRouter()
 session_factory = create_session_factory()
@@ -108,4 +109,76 @@ def execute_sql(request: SqlRequest) -> SqlDecisionResponse:
         execution_ms=0,
         row_count=0,
         rows=[],
+    )
+
+
+@router.post("/api/v1/redis/check", response_model=RedisDecisionResponse)
+def check_redis(request: RedisRequest) -> RedisDecisionResponse:
+    decision = RedisGatekeeperService().check(request.command, request.args, request.redis_context)
+    with session_factory() as session:
+        AuditLogService(session).log_redis_check(_redis_audit_request(request), decision)
+        session.commit()
+    return RedisDecisionResponse(
+        request_id=request.request_id,
+        allowed=decision.allowed,
+        reason_code=decision.reason_code,
+        message=decision.message,
+        command=decision.command,
+        args=decision.args,
+        datasource_code=decision.datasource_code,
+        diagnostics=decision.diagnostics,
+        execution_ms=0,
+        row_count=0,
+        rows=[],
+    )
+
+
+@router.post("/api/v1/redis/execute", response_model=RedisDecisionResponse)
+def execute_redis(request: RedisRequest) -> RedisDecisionResponse:
+    service = RedisGatekeeperService()
+    decision = service.check(request.command, request.args, request.redis_context)
+    audit_request = _redis_audit_request(request)
+    with session_factory() as session:
+        audit_service = AuditLogService(session)
+        if decision.allowed:
+            execute_result = service.execute(decision)
+            audit_service.log_redis_execute(audit_request, decision, execute_result)
+            session.commit()
+            return RedisDecisionResponse(
+                request_id=request.request_id,
+                allowed=execute_result.allowed,
+                reason_code=execute_result.reason_code,
+                message=execute_result.message,
+                command=decision.command,
+                args=decision.args,
+                datasource_code=decision.datasource_code,
+                diagnostics=decision.diagnostics,
+                execution_ms=execute_result.execution_ms,
+                row_count=execute_result.row_count,
+                rows=execute_result.rows,
+            )
+        audit_service.log_redis_check(audit_request, decision)
+        session.commit()
+    return RedisDecisionResponse(
+        request_id=request.request_id,
+        allowed=decision.allowed,
+        reason_code=decision.reason_code,
+        message=decision.message,
+        command=decision.command,
+        args=decision.args,
+        datasource_code=decision.datasource_code,
+        diagnostics=decision.diagnostics,
+        execution_ms=0,
+        row_count=0,
+        rows=[],
+    )
+
+
+def _redis_audit_request(request: RedisRequest) -> AuditRequest:
+    return AuditRequest(
+        request_id=request.request_id,
+        operator=request.operator,
+        scene=request.scene,
+        sql=f"redis:{request.command} {' '.join(request.args)}",
+        route_context=request.redis_context,
     )
