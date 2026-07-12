@@ -16,6 +16,18 @@ class Settings(BaseSettings):
     meta_db_user: str = Field(default="gatekeeper", alias="META_DB_USER")
     meta_db_password: str = Field(default="gatekeeper", alias="META_DB_PASSWORD")
 
+    demo_user_db_host: str = Field(default="127.0.0.1", alias="DEMO_USER_DB_HOST")
+    demo_user_db_port: int = Field(default=33062, alias="DEMO_USER_DB_PORT")
+    demo_user_db_name: str = Field(default="biz_user", alias="DEMO_USER_DB_NAME")
+    demo_user_db_user: str = Field(default="readonly", alias="DEMO_USER_DB_USER")
+    demo_user_db_password: str = Field(default="readonly", alias="DEMO_USER_DB_PASSWORD")
+
+    demo_order_db_host: str = Field(default="127.0.0.1", alias="DEMO_ORDER_DB_HOST")
+    demo_order_db_port: int = Field(default=33063, alias="DEMO_ORDER_DB_PORT")
+    demo_order_db_name: str = Field(default="biz_order", alias="DEMO_ORDER_DB_NAME")
+    demo_order_db_user: str = Field(default="readonly", alias="DEMO_ORDER_DB_USER")
+    demo_order_db_password: str = Field(default="readonly", alias="DEMO_ORDER_DB_PASSWORD")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

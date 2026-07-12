@@ -48,21 +48,21 @@ def seed_reference_data(settings: Settings | None = None) -> None:
             session,
             datasource_code="biz_user_db",
             display_name="Business User DB",
-            host="127.0.0.1",
-            port=33062,
-            database_name="biz_user",
-            username="readonly",
-            password_secret_ref="local:readonly",
+            host=app_settings.demo_user_db_host,
+            port=app_settings.demo_user_db_port,
+            database_name=app_settings.demo_user_db_name,
+            username=app_settings.demo_user_db_user,
+            password_secret_ref=f"local:{app_settings.demo_user_db_password}",
         )
         order_ds_id = _upsert_datasource(
             session,
             datasource_code="biz_order_db",
             display_name="Business Order DB",
-            host="127.0.0.1",
-            port=33063,
-            database_name="biz_order",
-            username="readonly",
-            password_secret_ref="local:readonly",
+            host=app_settings.demo_order_db_host,
+            port=app_settings.demo_order_db_port,
+            database_name=app_settings.demo_order_db_name,
+            username=app_settings.demo_order_db_user,
+            password_secret_ref=f"local:{app_settings.demo_order_db_password}",
         )
         user_table_id = _upsert_logical_table(
             session,
@@ -167,6 +167,15 @@ def _upsert_datasource(
         )
         session.add(existing)
         session.flush()
+    else:
+        existing.display_name = display_name
+        existing.host = host
+        existing.port = port
+        existing.database_name = database_name
+        existing.username = username
+        existing.password_secret_ref = password_secret_ref
+        existing.read_only = True
+        existing.enabled = True
     return existing.id
 
 

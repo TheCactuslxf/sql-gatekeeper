@@ -28,30 +28,27 @@ SQL Gatekeeper 就是为这条边界准备的。
 
 ## 快速开始
 
+克隆项目并启动完整 demo：
+
 ```bash
 git clone https://github.com/TheCactuslxf/sql-gatekeeper.git
 cd sql-gatekeeper
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+docker compose up --build
 ```
 
-启动本地 MySQL：
+它会启动：
+
+- `http://127.0.0.1:8080` 上的 SQL Gatekeeper API
+- 一个元数据库 MySQL
+- 一个 demo 用户库 MySQL
+- 一个 demo 订单库 MySQL
+
+API 容器启动时会自动创建元数据表，并写入 demo 路由规则。
+
+检查服务：
 
 ```bash
-docker compose up -d
-```
-
-初始化元数据：
-
-```bash
-python -m sql_gatekeeper.bootstrap.meta
-```
-
-启动 API：
-
-```bash
-uvicorn sql_gatekeeper.api.app:app --host 127.0.0.1 --port 8080
+curl -s http://127.0.0.1:8080/health
 ```
 
 提交一条逻辑 SQL：
@@ -66,6 +63,51 @@ curl -s http://127.0.0.1:8080/api/v1/sql/check \
     "sql": "select uid, user_name from user where uid = 10001 limit 10",
     "route_context": {}
   }'
+```
+
+执行通过检查的 SQL：
+
+```bash
+curl -s http://127.0.0.1:8080/api/v1/sql/execute \
+  -H "content-type: application/json" \
+  -d '{
+    "request_id": "demo-002",
+    "operator": "ai-agent",
+    "scene": "demo",
+    "sql": "select uid, user_name from user where uid = 10001 limit 1",
+    "route_context": {}
+  }'
+```
+
+也可以直接运行 demo 脚本：
+
+```bash
+./scripts/demo.sh
+```
+
+Windows PowerShell：
+
+```powershell
+.\scripts\demo.ps1
+```
+
+停止 demo：
+
+```bash
+docker compose down -v
+```
+
+### 本地开发
+
+如果你想在本机直接跑 API，可以只用 Docker 启动 MySQL：
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+docker compose up -d meta-db biz-user-db biz-order-db
+python -m sql_gatekeeper.bootstrap.meta
+uvicorn sql_gatekeeper.api.app:app --host 127.0.0.1 --port 8080
 ```
 
 返回结果中会包含改写后的物理 SQL：

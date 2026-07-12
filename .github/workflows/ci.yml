@@ -33,3 +33,7 @@ jobs:
 
       - name: Run tests
         run: pytest tests
+
+      - name: Build Docker image
+        if: matrix.python-version == '3.12'
+        run: docker build -t sql-gatekeeper:test .

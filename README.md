@@ -46,32 +46,27 @@ SQL Gatekeeper is built for that boundary.
 
 ## Quick Start
 
-Clone the project and install it in editable mode:
+Clone the project and start the full demo stack:
 
 ```bash
 git clone https://github.com/TheCactuslxf/sql-gatekeeper.git
 cd sql-gatekeeper
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+docker compose up --build
 ```
 
-Start the local MySQL stack:
+This starts:
+
+- the SQL Gatekeeper API on `http://127.0.0.1:8080`
+- a metadata MySQL instance
+- a demo user MySQL instance
+- a demo order MySQL instance
+
+The API container automatically creates metadata tables and seeds demo routing rules on startup.
+
+Check the service:
 
 ```bash
-docker compose up -d
-```
-
-Create metadata tables and seed demo routes:
-
-```bash
-python -m sql_gatekeeper.bootstrap.meta
-```
-
-Run the API:
-
-```bash
-uvicorn sql_gatekeeper.api.app:app --host 127.0.0.1 --port 8080
+curl -s http://127.0.0.1:8080/health
 ```
 
 Check a logical SQL query:
@@ -86,6 +81,51 @@ curl -s http://127.0.0.1:8080/api/v1/sql/check \
     "sql": "select uid, user_name from user where uid = 10001 limit 10",
     "route_context": {}
   }'
+```
+
+Execute the approved query:
+
+```bash
+curl -s http://127.0.0.1:8080/api/v1/sql/execute \
+  -H "content-type: application/json" \
+  -d '{
+    "request_id": "demo-002",
+    "operator": "ai-agent",
+    "scene": "demo",
+    "sql": "select uid, user_name from user where uid = 10001 limit 1",
+    "route_context": {}
+  }'
+```
+
+Or run the demo script:
+
+```bash
+./scripts/demo.sh
+```
+
+On Windows PowerShell:
+
+```powershell
+.\scripts\demo.ps1
+```
+
+Stop the demo stack:
+
+```bash
+docker compose down -v
+```
+
+### Local Development
+
+If you prefer to run the API directly on your machine, install the package and start only the MySQL services:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+docker compose up -d meta-db biz-user-db biz-order-db
+python -m sql_gatekeeper.bootstrap.meta
+uvicorn sql_gatekeeper.api.app:app --host 127.0.0.1 --port 8080
 ```
 
 Expected result:

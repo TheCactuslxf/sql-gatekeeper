@@ -1,6 +1,37 @@
-version: "3.9"
-
 services:
+  app:
+    build:
+      context: .
+    container_name: sql-gatekeeper-api
+    environment:
+      APP_ENV: docker
+      API_HOST: 0.0.0.0
+      API_PORT: 8080
+      META_DB_HOST: meta-db
+      META_DB_PORT: 3306
+      META_DB_NAME: gatekeeper_meta
+      META_DB_USER: gatekeeper
+      META_DB_PASSWORD: gatekeeper
+      DEMO_USER_DB_HOST: biz-user-db
+      DEMO_USER_DB_PORT: 3306
+      DEMO_USER_DB_NAME: biz_user
+      DEMO_USER_DB_USER: readonly
+      DEMO_USER_DB_PASSWORD: readonly
+      DEMO_ORDER_DB_HOST: biz-order-db
+      DEMO_ORDER_DB_PORT: 3306
+      DEMO_ORDER_DB_NAME: biz_order
+      DEMO_ORDER_DB_USER: readonly
+      DEMO_ORDER_DB_PASSWORD: readonly
+    ports:
+      - "8080:8080"
+    depends_on:
+      meta-db:
+        condition: service_healthy
+      biz-user-db:
+        condition: service_healthy
+      biz-order-db:
+        condition: service_healthy
+
   meta-db:
     image: mysql:8.0
     container_name: sql-gatekeeper-meta-db
@@ -14,6 +45,11 @@ services:
     volumes:
       - ./docker/mysql-init/meta:/docker-entrypoint-initdb.d
     command: ["mysqld", "--default-authentication-plugin=mysql_native_password"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
 
   biz-user-db:
     image: mysql:8.0
@@ -28,6 +64,11 @@ services:
     volumes:
       - ./docker/mysql-init/userdb:/docker-entrypoint-initdb.d
     command: ["mysqld", "--default-authentication-plugin=mysql_native_password"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
 
   biz-order-db:
     image: mysql:8.0
@@ -42,4 +83,8 @@ services:
     volumes:
       - ./docker/mysql-init/orderdb:/docker-entrypoint-initdb.d
     command: ["mysqld", "--default-authentication-plugin=mysql_native_password"]
-
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
