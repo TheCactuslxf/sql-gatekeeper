@@ -1,4 +1,5 @@
-VENV := /Users/wan/code/python/sql-gatekeeper/.venv/bin
+PYTHON ?= python
+PYTEST ?= pytest
 
 .PHONY: up down bootstrap-dev test test-docker
 
@@ -9,10 +10,10 @@ down:
 	docker compose down -v
 
 bootstrap-dev:
-	$(VENV)/python -m sql_gatekeeper.bootstrap.meta
+	$(PYTHON) -m sql_gatekeeper.bootstrap.meta
 
 test:
-	RUN_DOCKER_TESTS=1 $(VENV)/pytest tests
+	$(PYTEST) tests
 
 test-docker:
-	RUN_DOCKER_TESTS=1 $(VENV)/pytest tests
+	RUN_DOCKER_TESTS=1 $(PYTEST) tests
