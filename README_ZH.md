@@ -166,9 +166,15 @@ Redis 请求使用结构化命令，避免让模型提交任意 Redis CLI 文本
   "scene": "cache-debug",
   "command": "GET",
   "args": ["demo:user:10001"],
-  "redis_context": {}
+  "redis_context": {
+    "datasource_code": "demo_redis"
+  }
 }
 ```
+
+Redis 数据源会注册在和 MySQL 相同的元数据表中，通过 `db_type = "redis"` 区分。
+请求里可以用 `redis_context.datasource_code` 指定要查哪一个 Redis 实例。无论选择哪个数据源，
+都会继续经过 Redis 只读命令白名单、key 前缀策略和返回量限制。
 
 当前只允许有限只读命令，例如 `GET`、`MGET`、`HGET`、`HGETALL`、`EXISTS`、`TTL`、`TYPE`、`LRANGE`、`ZRANGE`。会拦截 `SET`、`DEL`、`EXPIRE`、`EVAL`、`CONFIG`、`KEYS`、`SCAN` 等高风险命令，也会拦截 `demo:user:*` 这类通配 key。
 

@@ -114,8 +114,8 @@ def execute_sql(request: SqlRequest) -> SqlDecisionResponse:
 
 @router.post("/api/v1/redis/check", response_model=RedisDecisionResponse)
 def check_redis(request: RedisRequest) -> RedisDecisionResponse:
-    decision = RedisGatekeeperService().check(request.command, request.args, request.redis_context)
     with session_factory() as session:
+        decision = RedisGatekeeperService(session=session).check(request.command, request.args, request.redis_context)
         AuditLogService(session).log_redis_check(_redis_audit_request(request), decision)
         session.commit()
     return RedisDecisionResponse(
@@ -135,10 +135,10 @@ def check_redis(request: RedisRequest) -> RedisDecisionResponse:
 
 @router.post("/api/v1/redis/execute", response_model=RedisDecisionResponse)
 def execute_redis(request: RedisRequest) -> RedisDecisionResponse:
-    service = RedisGatekeeperService()
-    decision = service.check(request.command, request.args, request.redis_context)
     audit_request = _redis_audit_request(request)
     with session_factory() as session:
+        service = RedisGatekeeperService(session=session)
+        decision = service.check(request.command, request.args, request.redis_context)
         audit_service = AuditLogService(session)
         if decision.allowed:
             execute_result = service.execute(decision)

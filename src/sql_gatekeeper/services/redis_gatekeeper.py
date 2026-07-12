@@ -5,8 +5,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import redis
+from sqlalchemy.orm import Session
 
 from sql_gatekeeper.config import Settings, get_settings
+from sql_gatekeeper.db.models import DatasourceInstance
+from sql_gatekeeper.repositories.datasource import DatasourceInstanceRepository
 
 
 READONLY_COMMANDS = {
@@ -79,13 +82,33 @@ class RedisExecuteResult:
 
 
 class RedisGatekeeperService:
-    def __init__(self, settings: Settings | None = None):
+    def __init__(self, settings: Settings | None = None, session: Session | None = None):
         self.settings = settings or get_settings()
+        self.session = session
 
     def check(self, command: str, args: list[str], redis_context: dict[str, Any] | None = None) -> RedisDecision:
         normalized_command = command.strip().upper()
         normalized_args = [str(arg) for arg in args]
         datasource_code = str((redis_context or {}).get("datasource_code") or self.settings.redis_datasource_code)
+        datasource = self._datasource(datasource_code)
+
+        if datasource is None:
+            return self._reject(
+                "REDIS_DATASOURCE_NOT_FOUND",
+                f"Redis datasource '{datasource_code}' was not found",
+                normalized_command,
+                normalized_args,
+                datasource_code,
+            )
+
+        if datasource.db_type.lower() != "redis":
+            return self._reject(
+                "REDIS_DATASOURCE_TYPE_INVALID",
+                f"Datasource '{datasource_code}' is not a Redis datasource",
+                normalized_command,
+                normalized_args,
+                datasource_code,
+            )
 
         if not normalized_command:
             return self._reject("EMPTY_REDIS_COMMAND", "Redis command must not be empty", normalized_command, normalized_args, datasource_code)
@@ -125,6 +148,12 @@ class RedisGatekeeperService:
             datasource_code=datasource_code,
             diagnostics=[
                 {
+                    "datasource": {
+                        "code": datasource.datasource_code,
+                        "host": datasource.host,
+                        "port": datasource.port,
+                        "database": datasource.database_name,
+                    },
                     "allowed_commands": sorted(READONLY_COMMANDS),
                     "max_keys_per_request": self.settings.redis_max_keys_per_request,
                     "max_result_items": self.settings.redis_max_result_items,
@@ -138,7 +167,17 @@ class RedisGatekeeperService:
             return RedisExecuteResult(False, decision.reason_code, decision.message, [], 0, 0)
 
         started_at = time.perf_counter()
-        client = self._client()
+        datasource = self._datasource(decision.datasource_code)
+        if datasource is None:
+            return RedisExecuteResult(
+                False,
+                "REDIS_DATASOURCE_NOT_FOUND",
+                f"Redis datasource '{decision.datasource_code}' was not found",
+                [],
+                0,
+                int((time.perf_counter() - started_at) * 1000),
+            )
+        client = self._client(datasource)
         preflight = self._preflight_result_size(client, decision)
         if preflight is not None:
             execution_ms = int((time.perf_counter() - started_at) * 1000)
@@ -167,15 +206,36 @@ class RedisGatekeeperService:
             execution_ms,
         )
 
-    def _client(self):
+    def _client(self, datasource: DatasourceInstance):
         return redis.Redis(
-            host=self.settings.redis_host,
-            port=self.settings.redis_port,
-            db=self.settings.redis_db,
-            password=self.settings.redis_password or None,
+            host=datasource.host,
+            port=datasource.port,
+            db=self._redis_db(datasource),
+            password=self._resolve_password(datasource.password_secret_ref),
             decode_responses=True,
             socket_connect_timeout=2,
             socket_timeout=5,
+        )
+
+    def _datasource(self, datasource_code: str) -> DatasourceInstance | None:
+        if self.session is not None:
+            return DatasourceInstanceRepository(self.session).get_enabled_by_code(datasource_code)
+
+        if datasource_code != self.settings.redis_datasource_code:
+            return None
+
+        return DatasourceInstance(
+            datasource_code=self.settings.redis_datasource_code,
+            display_name="Configured Redis",
+            db_type="redis",
+            host=self.settings.redis_host,
+            port=self.settings.redis_port,
+            database_name=str(self.settings.redis_db),
+            username="",
+            password_secret_ref=f"local:{self.settings.redis_password}" if self.settings.redis_password else "",
+            read_only=True,
+            enabled=True,
+            extra={},
         )
 
     def _validate_args(self, command: str, args: list[str], datasource_code: str) -> RedisDecision | None:
@@ -301,6 +361,19 @@ class RedisGatekeeperService:
 
     def _allowed_prefixes(self) -> list[str]:
         return [item.strip() for item in self.settings.redis_allowed_key_prefixes.split(",") if item.strip()]
+
+    def _redis_db(self, datasource: DatasourceInstance) -> int:
+        try:
+            return int(datasource.database_name or 0)
+        except ValueError:
+            return 0
+
+    def _resolve_password(self, secret_ref: str) -> str | None:
+        if not secret_ref:
+            return None
+        if secret_ref.startswith("local:"):
+            return secret_ref.split(":", 1)[1] or None
+        return secret_ref
 
     def _reject(self, reason_code: str, message: str, command: str, args: list[str], datasource_code: str) -> RedisDecision:
         return RedisDecision(

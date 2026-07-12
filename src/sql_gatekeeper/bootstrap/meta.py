@@ -26,7 +26,7 @@ class SeedPlan:
 
 def build_seed_plan() -> SeedPlan:
     return SeedPlan(
-        datasource_codes=["biz_user_db", "biz_order_db"],
+        datasource_codes=["biz_user_db", "biz_order_db", "demo_redis"],
         logical_tables=["user", "order"],
         policy_codes=["default_select_guard"],
     )
@@ -63,6 +63,17 @@ def seed_reference_data(settings: Settings | None = None) -> None:
             database_name=app_settings.demo_order_db_name,
             username=app_settings.demo_order_db_user,
             password_secret_ref=f"local:{app_settings.demo_order_db_password}",
+        )
+        _upsert_datasource(
+            session,
+            datasource_code=app_settings.redis_datasource_code,
+            display_name="Demo Redis",
+            db_type="redis",
+            host=app_settings.redis_host,
+            port=app_settings.redis_port,
+            database_name=str(app_settings.redis_db),
+            username="",
+            password_secret_ref=f"local:{app_settings.redis_password}" if app_settings.redis_password else "",
         )
         user_table_id = _upsert_logical_table(
             session,
@@ -150,12 +161,14 @@ def _upsert_datasource(
     database_name: str,
     username: str,
     password_secret_ref: str,
+    db_type: str = "mysql",
 ) -> int:
     existing = session.query(DatasourceInstance).filter_by(datasource_code=datasource_code).one_or_none()
     if existing is None:
         existing = DatasourceInstance(
             datasource_code=datasource_code,
             display_name=display_name,
+            db_type=db_type,
             host=host,
             port=port,
             database_name=database_name,
@@ -169,6 +182,7 @@ def _upsert_datasource(
         session.flush()
     else:
         existing.display_name = display_name
+        existing.db_type = db_type
         existing.host = host
         existing.port = port
         existing.database_name = database_name

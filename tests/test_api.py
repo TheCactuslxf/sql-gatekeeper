@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from sql_gatekeeper.api import routes
 from sql_gatekeeper.api.app import create_app
+from sql_gatekeeper.db.models import DatasourceInstance
 from sql_gatekeeper.services.explain import ExplainPlanSummary, ExplainRiskDecision, ExplainRiskEvaluator
 from sql_gatekeeper.services.executor import SqlExecutionService, ExecuteResult
 from sql_gatekeeper.services.redis_gatekeeper import RedisExecuteResult, RedisGatekeeperService
@@ -13,6 +14,22 @@ from tests_support import seed_extended_route_metadata
 def client(meta_session_factory, monkeypatch):
     with meta_session_factory() as session:
         seed_extended_route_metadata(session)
+        session.add(
+            DatasourceInstance(
+                datasource_code="demo_redis",
+                display_name="Demo Redis",
+                db_type="redis",
+                host="127.0.0.1",
+                port=6379,
+                database_name="0",
+                username="",
+                password_secret_ref="",
+                read_only=True,
+                enabled=True,
+                extra={},
+            )
+        )
+        session.commit()
     monkeypatch.setattr(routes, "session_factory", meta_session_factory)
     return TestClient(create_app())
 

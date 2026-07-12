@@ -225,9 +225,15 @@ Request shape:
   "scene": "cache-debug",
   "command": "GET",
   "args": ["demo:user:10001"],
-  "redis_context": {}
+  "redis_context": {
+    "datasource_code": "demo_redis"
+  }
 }
 ```
+
+Redis datasources are registered in the same metadata table as MySQL datasources, using `db_type = "redis"`.
+Use `redis_context.datasource_code` to choose which Redis instance to query. Each selected datasource is still
+checked by the Redis command allowlist, key-prefix policy, and result limits.
 
 ## Routing Examples
 
