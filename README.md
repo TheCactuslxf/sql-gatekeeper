@@ -8,6 +8,8 @@
 
 SQL Gatekeeper sits between an AI agent and MySQL. It lets the agent write simple logical SQL while the gateway decides whether the query is safe, maps logical tables to physical shards, rewrites the SQL, checks the execution plan, and records the decision.
 
+![SQL Gatekeeper terminal demo](docs/assets/demo-terminal.png)
+
 ```mermaid
 flowchart LR
     A["LLM / AI Agent"] --> B["SQL Gatekeeper API"]

@@ -8,6 +8,7 @@ All notable changes to SQL Gatekeeper will be documented in this file.
 - Added Chinese README.
 - Added roadmap, contribution guide, security policy, and CI workflow.
 - Added Dockerfile, one-command Docker Compose startup, and demo scripts.
+- Added README demo screenshot.
 
 ## 0.1.0
 

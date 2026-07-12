@@ -4,6 +4,8 @@
 
 SQL Gatekeeper 放在 AI Agent 和 MySQL 之间。调用方可以提交逻辑 SQL，网关负责判断 SQL 是否安全、根据元数据路由到真实物理分表、改写 SQL、检查执行计划，并记录审计日志。
 
+![SQL Gatekeeper terminal demo](docs/assets/demo-terminal.png)
+
 ## 为什么需要它
 
 让 LLM 直接执行 SQL 很方便，但生产环境里风险也很集中：
