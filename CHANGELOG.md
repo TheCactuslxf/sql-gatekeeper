@@ -11,6 +11,7 @@ All notable changes to SQL Gatekeeper will be documented in this file.
 - Added README demo screenshot.
 - Added safe Redis check/execute API with readonly command allowlist and key-scope limits.
 - Added metadata-backed Redis datasource selection via `redis_context.datasource_code`.
+- Added Redis datasource routing by `redis_context.catlog_name` plus Redis key prefix metadata.
 
 ## 0.1.0
 

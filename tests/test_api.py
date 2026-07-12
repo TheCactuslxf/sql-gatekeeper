@@ -26,7 +26,10 @@ def client(meta_session_factory, monkeypatch):
                 password_secret_ref="",
                 read_only=True,
                 enabled=True,
-                extra={},
+                extra={
+                    "catlog_name": "demo",
+                    "allowed_key_prefixes": ["demo:"],
+                },
             )
         )
         session.commit()
@@ -98,7 +101,7 @@ def test_check_redis_endpoint_allows_safe_get(client):
             "scene": "cache",
             "command": "GET",
             "args": ["demo:user:10001"],
-            "redis_context": {},
+            "redis_context": {"catlog_name": "demo"},
         },
     )
 
@@ -119,7 +122,7 @@ def test_check_redis_endpoint_rejects_write_command(client):
             "scene": "cache",
             "command": "SET",
             "args": ["demo:user:10001", "bob"],
-            "redis_context": {},
+            "redis_context": {"catlog_name": "demo"},
         },
     )
 
@@ -139,7 +142,7 @@ def test_execute_redis_endpoint_returns_rows(monkeypatch, client):
             "scene": "cache",
             "command": "GET",
             "args": ["demo:user:10001"],
-            "redis_context": {},
+            "redis_context": {"catlog_name": "demo"},
         },
     )
 

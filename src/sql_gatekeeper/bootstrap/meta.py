@@ -74,6 +74,11 @@ def seed_reference_data(settings: Settings | None = None) -> None:
             database_name=str(app_settings.redis_db),
             username="",
             password_secret_ref=f"local:{app_settings.redis_password}" if app_settings.redis_password else "",
+            extra={
+                "catlog_name": "demo",
+                "redis_catalog": "demo",
+                "allowed_key_prefixes": ["demo:", "user:", "order:"],
+            },
         )
         user_table_id = _upsert_logical_table(
             session,
@@ -162,7 +167,9 @@ def _upsert_datasource(
     username: str,
     password_secret_ref: str,
     db_type: str = "mysql",
+    extra: dict | None = None,
 ) -> int:
+    datasource_extra = extra or {}
     existing = session.query(DatasourceInstance).filter_by(datasource_code=datasource_code).one_or_none()
     if existing is None:
         existing = DatasourceInstance(
@@ -176,7 +183,7 @@ def _upsert_datasource(
             password_secret_ref=password_secret_ref,
             read_only=True,
             enabled=True,
-            extra={},
+            extra=datasource_extra,
         )
         session.add(existing)
         session.flush()
@@ -190,6 +197,7 @@ def _upsert_datasource(
         existing.password_secret_ref = password_secret_ref
         existing.read_only = True
         existing.enabled = True
+        existing.extra = datasource_extra
     return existing.id
 
 

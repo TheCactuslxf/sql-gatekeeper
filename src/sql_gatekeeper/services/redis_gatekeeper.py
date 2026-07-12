@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import redis
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from sql_gatekeeper.config import Settings, get_settings
@@ -81,6 +82,13 @@ class RedisExecuteResult:
     execution_ms: int
 
 
+@dataclass(frozen=True)
+class RedisRouteResolution:
+    datasource: DatasourceInstance | None
+    reason_code: str = ""
+    message: str = ""
+
+
 class RedisGatekeeperService:
     def __init__(self, settings: Settings | None = None, session: Session | None = None):
         self.settings = settings or get_settings()
@@ -89,17 +97,43 @@ class RedisGatekeeperService:
     def check(self, command: str, args: list[str], redis_context: dict[str, Any] | None = None) -> RedisDecision:
         normalized_command = command.strip().upper()
         normalized_args = [str(arg) for arg in args]
-        datasource_code = str((redis_context or {}).get("datasource_code") or self.settings.redis_datasource_code)
-        datasource = self._datasource(datasource_code)
+        redis_context = redis_context or {}
 
-        if datasource is None:
+        if not normalized_command:
+            return self._reject("EMPTY_REDIS_COMMAND", "Redis command must not be empty", normalized_command, normalized_args, "")
+
+        if normalized_command in DENIED_COMMANDS:
             return self._reject(
-                "REDIS_DATASOURCE_NOT_FOUND",
-                f"Redis datasource '{datasource_code}' was not found",
+                "REDIS_COMMAND_DENIED",
+                f"Redis command '{normalized_command}' is not allowed",
                 normalized_command,
                 normalized_args,
-                datasource_code,
+                str(redis_context.get("datasource_code") or ""),
             )
+
+        if normalized_command not in READONLY_COMMANDS:
+            return self._reject(
+                "REDIS_COMMAND_UNSUPPORTED",
+                f"Redis command '{normalized_command}' is not supported by the safe Redis gatekeeper",
+                normalized_command,
+                normalized_args,
+                str(redis_context.get("datasource_code") or ""),
+            )
+
+        arg_decision = self._validate_args(
+            normalized_command,
+            normalized_args,
+            str(redis_context.get("datasource_code") or ""),
+        )
+        if arg_decision is not None:
+            return arg_decision
+
+        route = self._resolve_datasource(normalized_command, normalized_args, redis_context)
+        datasource = route.datasource
+        datasource_code = str(redis_context.get("datasource_code") or (datasource.datasource_code if datasource else ""))
+
+        if datasource is None:
+            return self._reject(route.reason_code, route.message, normalized_command, normalized_args, datasource_code)
 
         if datasource.db_type.lower() != "redis":
             return self._reject(
@@ -110,32 +144,7 @@ class RedisGatekeeperService:
                 datasource_code,
             )
 
-        if not normalized_command:
-            return self._reject("EMPTY_REDIS_COMMAND", "Redis command must not be empty", normalized_command, normalized_args, datasource_code)
-
-        if normalized_command in DENIED_COMMANDS:
-            return self._reject(
-                "REDIS_COMMAND_DENIED",
-                f"Redis command '{normalized_command}' is not allowed",
-                normalized_command,
-                normalized_args,
-                datasource_code,
-            )
-
-        if normalized_command not in READONLY_COMMANDS:
-            return self._reject(
-                "REDIS_COMMAND_UNSUPPORTED",
-                f"Redis command '{normalized_command}' is not supported by the safe Redis gatekeeper",
-                normalized_command,
-                normalized_args,
-                datasource_code,
-            )
-
-        arg_decision = self._validate_args(normalized_command, normalized_args, datasource_code)
-        if arg_decision is not None:
-            return arg_decision
-
-        key_decision = self._validate_keys(normalized_command, normalized_args, datasource_code)
+        key_decision = self._validate_keys(normalized_command, normalized_args, datasource)
         if key_decision is not None:
             return key_decision
 
@@ -157,7 +166,10 @@ class RedisGatekeeperService:
                     "allowed_commands": sorted(READONLY_COMMANDS),
                     "max_keys_per_request": self.settings.redis_max_keys_per_request,
                     "max_result_items": self.settings.redis_max_result_items,
-                    "allowed_key_prefixes": self._allowed_prefixes(),
+                    "allowed_key_prefixes": self._allowed_prefixes(datasource),
+                    "route_context": {
+                        "catlog_name": self._catalog_name(redis_context),
+                    },
                 }
             ],
         )
@@ -238,6 +250,78 @@ class RedisGatekeeperService:
             extra={},
         )
 
+    def _resolve_datasource(
+        self,
+        command: str,
+        args: list[str],
+        redis_context: dict[str, Any],
+    ) -> RedisRouteResolution:
+        datasource_code = str(redis_context.get("datasource_code") or "")
+        if datasource_code:
+            datasource = self._datasource(datasource_code)
+            if datasource is None:
+                return RedisRouteResolution(
+                    None,
+                    "REDIS_DATASOURCE_NOT_FOUND",
+                    f"Redis datasource '{datasource_code}' was not found",
+                )
+            return RedisRouteResolution(datasource)
+
+        if self.session is None:
+            datasource = self._datasource(self.settings.redis_datasource_code)
+            if datasource is None:
+                return RedisRouteResolution(
+                    None,
+                    "REDIS_DATASOURCE_NOT_FOUND",
+                    f"Redis datasource '{self.settings.redis_datasource_code}' was not found",
+                )
+            return RedisRouteResolution(datasource)
+
+        catalog_name = self._catalog_name(redis_context)
+        if not catalog_name:
+            return RedisRouteResolution(
+                None,
+                "REDIS_ROUTE_CONTEXT_REQUIRED",
+                "Redis routing requires redis_context.catlog_name/catalog_name or redis_context.datasource_code",
+            )
+
+        key = self._key_args(command, args)[:1]
+        route_key = key[0] if key else ""
+        stmt = select(DatasourceInstance).where(
+            DatasourceInstance.db_type == "redis",
+            DatasourceInstance.enabled.is_(True),
+        )
+        candidates = list(self.session.execute(stmt).scalars())
+        matching_catalog = [
+            datasource
+            for datasource in candidates
+            if self._datasource_catalog(datasource).lower() == catalog_name.lower()
+        ]
+        if not matching_catalog:
+            return RedisRouteResolution(
+                None,
+                "REDIS_ROUTE_NOT_FOUND",
+                f"No Redis datasource matched catalog '{catalog_name}'",
+            )
+        matching_key = [
+            datasource
+            for datasource in matching_catalog
+            if not route_key or self._key_allowed_by_datasource(route_key, datasource)
+        ]
+        if len(matching_key) == 1:
+            return RedisRouteResolution(matching_key[0])
+        if not matching_key:
+            return RedisRouteResolution(
+                None,
+                "REDIS_ROUTE_NOT_FOUND",
+                f"No Redis datasource matched catalog '{catalog_name}' and key '{route_key}'",
+            )
+        return RedisRouteResolution(
+            None,
+            "REDIS_ROUTE_AMBIGUOUS",
+            f"Multiple Redis datasources matched catalog '{catalog_name}' and key '{route_key}'",
+        )
+
     def _validate_args(self, command: str, args: list[str], datasource_code: str) -> RedisDecision | None:
         arg_count = len(args)
         if command in {"GET", "HGETALL", "TTL", "PTTL", "TYPE", "LLEN", "SCARD", "ZCARD", "SMEMBERS"} and arg_count != 1:
@@ -274,7 +358,9 @@ class RedisGatekeeperService:
                 )
         return None
 
-    def _validate_keys(self, command: str, args: list[str], datasource_code: str) -> RedisDecision | None:
+    def _validate_keys(self, command: str, args: list[str], datasource: DatasourceInstance) -> RedisDecision | None:
+        datasource_code = datasource.datasource_code
+        prefixes = self._allowed_prefixes(datasource)
         for key in self._key_args(command, args):
             if not key:
                 return self._reject("REDIS_KEY_EMPTY", "Redis key must not be empty", command, args, datasource_code)
@@ -288,7 +374,6 @@ class RedisGatekeeperService:
                 )
             if any(token in key for token in ["*", "?", "["]):
                 return self._reject("REDIS_KEY_PATTERN_DENIED", "Redis wildcard key patterns are not allowed", command, args, datasource_code)
-            prefixes = self._allowed_prefixes()
             if prefixes and "*" not in prefixes and not any(key.startswith(prefix) for prefix in prefixes):
                 return self._reject(
                     "REDIS_KEY_SCOPE_DENIED",
@@ -359,8 +444,36 @@ class RedisGatekeeperService:
             return args[:1]
         return args[:1]
 
-    def _allowed_prefixes(self) -> list[str]:
+    def _allowed_prefixes(self, datasource: DatasourceInstance | None = None) -> list[str]:
+        if datasource is not None:
+            raw_prefixes = datasource.extra.get("allowed_key_prefixes") if isinstance(datasource.extra, dict) else None
+            if isinstance(raw_prefixes, list):
+                return [str(item).strip() for item in raw_prefixes if str(item).strip()]
+            if isinstance(raw_prefixes, str):
+                return [item.strip() for item in raw_prefixes.split(",") if item.strip()]
         return [item.strip() for item in self.settings.redis_allowed_key_prefixes.split(",") if item.strip()]
+
+    def _key_allowed_by_datasource(self, key: str, datasource: DatasourceInstance) -> bool:
+        prefixes = self._allowed_prefixes(datasource)
+        return not prefixes or "*" in prefixes or any(key.startswith(prefix) for prefix in prefixes)
+
+    def _catalog_name(self, redis_context: dict[str, Any]) -> str:
+        return str(
+            redis_context.get("catlog_name")
+            or redis_context.get("catalog_name")
+            or redis_context.get("catalog")
+            or ""
+        )
+
+    def _datasource_catalog(self, datasource: DatasourceInstance) -> str:
+        if not isinstance(datasource.extra, dict):
+            return ""
+        return str(
+            datasource.extra.get("catlog_name")
+            or datasource.extra.get("catalog_name")
+            or datasource.extra.get("redis_catalog")
+            or ""
+        )
 
     def _redis_db(self, datasource: DatasourceInstance) -> int:
         try:

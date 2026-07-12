@@ -52,7 +52,7 @@ curl -s "$BASE_URL/api/v1/redis/check" \
     "scene": "demo",
     "command": "GET",
     "args": ["demo:user:10001"],
-    "redis_context": {}
+    "redis_context": {"catlog_name": "demo"}
   }'
 echo
 
@@ -65,7 +65,7 @@ curl -s "$BASE_URL/api/v1/redis/execute" \
     "scene": "demo",
     "command": "GET",
     "args": ["demo:user:10001"],
-    "redis_context": {}
+    "redis_context": {"catlog_name": "demo"}
   }'
 echo
 
@@ -78,6 +78,6 @@ curl -s "$BASE_URL/api/v1/redis/check" \
     "scene": "demo",
     "command": "SET",
     "args": ["demo:user:10001", "alice"],
-    "redis_context": {}
+    "redis_context": {"catlog_name": "demo"}
   }'
 echo

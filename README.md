@@ -189,14 +189,16 @@ Request shape:
   "command": "GET",
   "args": ["demo:user:10001"],
   "redis_context": {
-    "datasource_code": "demo_redis"
+    "catlog_name": "demo"
   }
 }
 ```
 
 Redis datasources are registered in the same metadata table as MySQL datasources, using `db_type = "redis"`.
-Use `redis_context.datasource_code` to choose which Redis instance to query. Each selected datasource is still
-checked by the Redis command allowlist, key-prefix policy, and result limits.
+In normal AI-agent flows, the model only needs to provide a business catalog (`catlog_name`, `catalog_name`, or `catalog`)
+and the Redis key. SQL Gatekeeper resolves the Redis datasource by matching metadata catalog plus the datasource's
+`extra.allowed_key_prefixes`. `redis_context.datasource_code` is still supported as an explicit override for internal
+tools and debugging. Each selected datasource is checked by the Redis command allowlist, key-prefix policy, and result limits.
 
 ## Routing Examples
 

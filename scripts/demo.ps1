@@ -66,7 +66,7 @@ Invoke-DemoRequest `
         scene = "demo"
         command = "GET"
         args = @("demo:user:10001")
-        redis_context = @{}
+        redis_context = @{ catlog_name = "demo" }
     }
 
 Invoke-DemoRequest `
@@ -78,7 +78,7 @@ Invoke-DemoRequest `
         scene = "demo"
         command = "GET"
         args = @("demo:user:10001")
-        redis_context = @{}
+        redis_context = @{ catlog_name = "demo" }
     }
 
 Invoke-DemoRequest `
@@ -90,5 +90,5 @@ Invoke-DemoRequest `
         scene = "demo"
         command = "SET"
         args = @("demo:user:10001", "alice")
-        redis_context = @{}
+        redis_context = @{ catlog_name = "demo" }
     }

@@ -104,7 +104,10 @@ def test_redis_check_resolves_datasource_from_metadata():
                 password_secret_ref="",
                 read_only=True,
                 enabled=True,
-                extra={},
+                extra={
+                    "catlog_name": "demo",
+                    "allowed_key_prefixes": ["demo:"],
+                },
             )
         )
         session.commit()
@@ -119,6 +122,111 @@ def test_redis_check_resolves_datasource_from_metadata():
     assert decision.datasource_code == "cache_a"
     assert decision.diagnostics[0]["datasource"]["host"] == "redis-a"
     assert decision.diagnostics[0]["datasource"]["database"] == "2"
+
+
+def test_redis_check_resolves_datasource_from_catalog_and_key():
+    with _metadata_session() as session:
+        session.add_all(
+            [
+                DatasourceInstance(
+                    id=1,
+                    datasource_code="cache_user",
+                    display_name="User Cache",
+                    db_type="redis",
+                    host="redis-user",
+                    port=6379,
+                    database_name="0",
+                    username="",
+                    password_secret_ref="",
+                    read_only=True,
+                    enabled=True,
+                    extra={"catlog_name": "demo", "allowed_key_prefixes": ["user:"]},
+                ),
+                DatasourceInstance(
+                    id=2,
+                    datasource_code="cache_order",
+                    display_name="Order Cache",
+                    db_type="redis",
+                    host="redis-order",
+                    port=6379,
+                    database_name="0",
+                    username="",
+                    password_secret_ref="",
+                    read_only=True,
+                    enabled=True,
+                    extra={"catlog_name": "demo", "allowed_key_prefixes": ["order:"]},
+                ),
+            ]
+        )
+        session.commit()
+
+        decision = RedisGatekeeperService(_settings(), session=session).check(
+            "GET",
+            ["order:10001"],
+            {"catlog_name": "demo"},
+        )
+
+    assert decision.allowed is True
+    assert decision.datasource_code == "cache_order"
+    assert decision.diagnostics[0]["datasource"]["host"] == "redis-order"
+
+
+def test_redis_check_rejects_missing_catalog_route_context():
+    with _metadata_session() as session:
+        decision = RedisGatekeeperService(_settings(), session=session).check(
+            "GET",
+            ["demo:user:10001"],
+            {},
+        )
+
+    assert decision.allowed is False
+    assert decision.reason_code == "REDIS_ROUTE_CONTEXT_REQUIRED"
+
+
+def test_redis_check_rejects_ambiguous_catalog_and_key_route():
+    with _metadata_session() as session:
+        session.add_all(
+            [
+                DatasourceInstance(
+                    id=1,
+                    datasource_code="cache_a",
+                    display_name="Cache A",
+                    db_type="redis",
+                    host="redis-a",
+                    port=6379,
+                    database_name="0",
+                    username="",
+                    password_secret_ref="",
+                    read_only=True,
+                    enabled=True,
+                    extra={"catlog_name": "demo", "allowed_key_prefixes": ["demo:"]},
+                ),
+                DatasourceInstance(
+                    id=2,
+                    datasource_code="cache_b",
+                    display_name="Cache B",
+                    db_type="redis",
+                    host="redis-b",
+                    port=6379,
+                    database_name="0",
+                    username="",
+                    password_secret_ref="",
+                    read_only=True,
+                    enabled=True,
+                    extra={"catlog_name": "demo", "allowed_key_prefixes": ["demo:"]},
+                ),
+            ]
+        )
+        session.commit()
+
+        decision = RedisGatekeeperService(_settings(), session=session).check(
+            "GET",
+            ["demo:user:10001"],
+            {"catlog_name": "demo"},
+        )
+
+    assert decision.allowed is False
+    assert decision.reason_code == "REDIS_ROUTE_AMBIGUOUS"
 
 
 def test_redis_check_rejects_missing_metadata_datasource():
