@@ -23,6 +23,7 @@ def test_audit_log_service_writes_check_and_execute_records(meta_session):
         physical_tables=["user_1"],
         datasource_codes=["biz_user_db"],
         explain_summaries=[{"access_type": "ref"}],
+        route_diagnostics=[],
     )
     execute_result = ExecuteResult(
         allowed=True,

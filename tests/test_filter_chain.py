@@ -107,6 +107,7 @@ def _build_context(sql: str) -> FilterContext:
                     route_value="1",
                 )
             ],
+            diagnostics=[],
         ),
     )
 

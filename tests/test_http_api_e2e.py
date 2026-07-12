@@ -1,6 +1,7 @@
 import os
 import socket
 import subprocess
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -23,8 +24,8 @@ pytestmark = pytest.mark.skipif(
     reason="Docker MySQL tests are disabled by default",
 )
 
-PROJECT_ROOT = Path("/Users/wan/code/python/sql-gatekeeper")
-VENV_PYTHON = PROJECT_ROOT / ".venv/bin/python"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+VENV_PYTHON = Path(sys.executable)
 
 
 def _pick_free_port() -> int:
